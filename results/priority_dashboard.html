@@ -269,10 +269,11 @@
 
       data.assignments.forEach((assignment) => {
         const row = document.createElement('tr');
+        const distance = assignment.distance_km == null ? 'Atama bekliyor' : `${assignment.distance_km} km`;
         row.innerHTML = `
           <td>${assignment.request_id}</td>
           <td>${assignment.team_name}</td>
-          <td>${assignment.distance_km} km</td>
+          <td>${distance}</td>
         `;
         tbody.appendChild(row);
       });

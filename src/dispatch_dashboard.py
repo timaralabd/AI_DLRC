@@ -15,11 +15,30 @@ OUTPUT_PATH = Path("results/dispatch_assignment.json")
 
 
 def build_dispatch_plan():
-    save_teams(get_all_teams())
+    teams = fetch_teams()
+    if not teams:
+        save_teams(get_all_teams())
+        teams = fetch_teams()
     requests = load_ranked_requests()
     assignments = []
+    available_teams = [team for team in teams if team.get("status") == "ready"]
     for request in requests:
-        assignment = assign_team_for_request(request)
+        if available_teams:
+            assignment = assign_team_for_request(request, available_teams)
+            available_teams = [
+                team for team in available_teams
+                if team.get("id") != assignment["team_id"]
+            ]
+        else:
+            assignment = {
+                "team_id": None,
+                "team_name": "Atama bekliyor",
+                "team_type": "-",
+                "distance_km": None,
+                "capacity": 0,
+                "status": "unassigned",
+                "score": 0,
+            }
         assignments.append({
             "request_id": request.get("id"),
             "reporter": request.get("reporter"),
