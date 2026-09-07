@@ -7,14 +7,14 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     :root {
-      --bg: #f5f3ed;
-      --panel: rgba(255,255,255,0.95);
-      --ink: #17221f;
-      --muted: #5f6a66;
-      --primary: #0c7462;
-      --warn: #d96b2f;
-      --danger: #c6403e;
-      --line: #dfe7e2;
+      --bg: #050a12;
+      --panel: rgba(10, 20, 34, 0.97);
+      --ink: #e7f1ff;
+      --muted: #91a8c2;
+      --primary: #1677ff;
+      --warn: #2d9cff;
+      --danger: #26496f;
+      --line: #1e3b5e;
     }
     * { box-sizing: border-box; }
     html, body, #map { margin: 0; width: 100%; height: 100%; }
@@ -26,21 +26,21 @@
     form { display: grid; gap: 12px; }
     label { display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
     input, select, button { font: inherit; }
-    input, select { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: white; }
+    input, select { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #081525; color: var(--ink); }
     button {
       border: none; border-radius: 8px; background: var(--primary); color: white;
       font-weight: 700; padding: 12px 14px; cursor: pointer;
     }
     .secondary {
-      background: #eef4f2;
+      background: #102946;
       color: var(--ink);
       border: 1px solid var(--line);
       margin-top: 8px;
     }
-    .meta { margin-top: 18px; padding: 12px; background: #f0f7f4; border-radius: 8px; border: 1px solid #dcefe7; }
+    .meta { margin-top: 18px; padding: 12px; background: #0b213b; border-radius: 8px; border: 1px solid #1c5b99; }
     .meta strong { font-size: 22px; display: block; margin-top: 4px; }
     .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
-    .stat { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+    .stat { background: #0a1728; border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
     .stat span { display: block; font-size: 11px; color: var(--muted); }
     .stat strong { font-size: 20px; }
     .team-box { margin-top: 22px; }
@@ -206,11 +206,11 @@
 
     function getTeamColor(status) {
       const palette = {
-        ready: '#2e8b57',
-        'en-route': '#d96b2f',
-        assigned: '#2b77c4',
-        offline: '#c6403e',
-        waiting: '#6f7d7b'
+        ready: '#39a0ff',
+        'en-route': '#1677ff',
+        assigned: '#73b7ff',
+        offline: '#172b45',
+        waiting: '#6685a8'
       };
       return palette[status] || '#0c7462';
     }
@@ -251,9 +251,9 @@
       if (endMarker) map.removeLayer(endMarker);
 
       const points = route.coordinates.map(([lon, lat]) => [lat, lon]);
-      routeLayer = L.polyline(points, { color: '#0c7462', weight: 6, opacity: 0.95 }).addTo(map);
-      startMarker = L.circleMarker([request.latitude, request.longitude], { radius: 9, color: '#d65a4a', fillColor: '#d65a4a', fillOpacity: 1 }).addTo(map).bindPopup(`Acil çağrı: ${request.id}`);
-      endMarker = L.circleMarker([route.end[1], route.end[0]], { radius: 8, color: '#2b77c4', fillColor: '#2b77c4', fillOpacity: 1 }).addTo(map).bindPopup('Hedef lokasyon');
+      routeLayer = L.polyline(points, { color: '#1677ff', weight: 6, opacity: 0.95 }).addTo(map);
+      startMarker = L.circleMarker([request.latitude, request.longitude], { radius: 9, color: '#081525', fillColor: '#1677ff', fillOpacity: 1 }).addTo(map).bindPopup(`Acil çağrı: ${request.id}`);
+      endMarker = L.circleMarker([route.end[1], route.end[0]], { radius: 8, color: '#73b7ff', fillColor: '#73b7ff', fillOpacity: 1 }).addTo(map).bindPopup('Hedef lokasyon');
       map.fitBounds(routeLayer.getBounds().pad(0.2));
       updateStats(request, route);
     }
