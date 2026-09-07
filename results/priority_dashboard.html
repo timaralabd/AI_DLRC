@@ -44,6 +44,10 @@
     .stat { background: #0a1728; border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
     .stat span { display: block; font-size: 11px; color: var(--muted); }
     .stat strong { font-size: 20px; }
+    .ops-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
+    .ops-kpi { min-width: 0; padding: 8px 6px; background: #06101d; border: 1px solid var(--line); border-radius: 6px; text-align: center; }
+    .ops-kpi strong { display: block; color: #73b7ff; font-size: 18px; }
+    .ops-kpi span { color: var(--muted); font-size: 10px; white-space: nowrap; }
     .team-box { margin-top: 22px; }
     .team-box h3 { margin: 0 0 10px; font-size: 16px; }
     .history-table { max-height: 220px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; }
@@ -98,6 +102,12 @@
           <span>Yol nokta</span>
           <strong id="nodeValue">-</strong>
         </div>
+      </div>
+
+      <div class="ops-summary" aria-label="Operasyon özeti">
+        <div class="ops-kpi"><strong id="activeRequestCount">-</strong><span>Aktif talep</span></div>
+        <div class="ops-kpi"><strong id="readyTeamCount">-</strong><span>Hazır ekip</span></div>
+        <div class="ops-kpi"><strong id="pendingAssignmentCount">-</strong><span>Bekleyen atama</span></div>
       </div>
 
       <div class="team-box">
@@ -264,6 +274,7 @@
       const response = await fetch('/api/dispatch');
       if (!response.ok) return;
       const data = await response.json();
+      document.getElementById('pendingAssignmentCount').textContent = data.assignments.filter((assignment) => assignment.status === 'unassigned').length;
       const tbody = document.getElementById('dispatchTableBody');
       tbody.innerHTML = '';
 
@@ -329,6 +340,7 @@
       const response = await fetch('/api/teams');
       if (!response.ok) return;
       const data = await response.json();
+      document.getElementById('readyTeamCount').textContent = data.teams.filter((team) => team.status === 'ready').length;
       const select = document.getElementById('teamStatusSelect');
       select.innerHTML = '';
       data.teams.forEach((team) => {
@@ -340,6 +352,7 @@
     }
 
     function syncRequestStatusSelect(requests) {
+      document.getElementById('activeRequestCount').textContent = requests.filter((request) => request.status !== 'resolved').length;
       const select = document.getElementById('requestStatusSelect');
       select.innerHTML = '';
       requests.forEach((request) => {
@@ -554,6 +567,7 @@
       const requestsResponse = await fetch('/api/requests');
       if (!requestsResponse.ok) return;
       const requestsData = await requestsResponse.json();
+      syncRequestStatusSelect(requestsData.requests);
       const firstRequest = requestsData.requests[0];
       if (!firstRequest) return;
 
