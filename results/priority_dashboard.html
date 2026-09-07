@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI-DLRC Acil Durum Paneli</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root {
+      --bg: #f5f3ed;
+      --panel: rgba(255,255,255,0.95);
+      --ink: #17221f;
+      --muted: #5f6a66;
+      --primary: #0c7462;
+      --warn: #d96b2f;
+      --danger: #c6403e;
+      --line: #dfe7e2;
+    }
+    * { box-sizing: border-box; }
+    html, body, #map { margin: 0; width: 100%; height: 100%; }
+    body { font-family: Arial, sans-serif; background: var(--bg); color: var(--ink); }
+    .app { display: grid; grid-template-columns: 360px 1fr; height: 100vh; }
+    .sidebar { background: var(--panel); border-right: 1px solid var(--line); padding: 20px; overflow-y: auto; }
+    .eyebrow { text-transform: uppercase; letter-spacing: 1.4px; font-size: 11px; color: var(--primary); font-weight: 700; }
+    h1 { margin: 10px 0 18px; font-size: 28px; }
+    form { display: grid; gap: 12px; }
+    label { display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
+    input, select, button { font: inherit; }
+    input, select { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: white; }
+    button {
+      border: none; border-radius: 8px; background: var(--primary); color: white;
+      font-weight: 700; padding: 12px 14px; cursor: pointer;
+    }
+    .secondary {
+      background: #eef4f2;
+      color: var(--ink);
+      border: 1px solid var(--line);
+      margin-top: 8px;
+    }
+    .meta { margin-top: 18px; padding: 12px; background: #f0f7f4; border-radius: 8px; border: 1px solid #dcefe7; }
+    .meta strong { font-size: 22px; display: block; margin-top: 4px; }
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+    .stat { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+    .stat span { display: block; font-size: 11px; color: var(--muted); }
+    .stat strong { font-size: 20px; }
+    .team-box { margin-top: 22px; }
+    .team-box h3 { margin: 0 0 10px; font-size: 16px; }
+    .history-table { max-height: 220px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; }
+    .history-table table { margin: 0; }
+    .history-table td { font-size: 11px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--muted); font-size: 11px; text-transform: uppercase; }
+    #map { min-height: 100%; }
+    @media (max-width: 900px) { .app { grid-template-columns: 1fr; } .sidebar { border-right: none; border-bottom: 1px solid var(--line); } #map { min-height: 60vh; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="eyebrow">AI-DLRC / Acil Durum</div>
+      <h1>Öncelikli rota paneli</h1>
+
+      <form id="routeForm">
+        <label>
+          Acil talep
+          <select id="requestSelect" name="requestSelect"></select>
+        </label>
+
+        <label>
+          Hedef enlem
+          <input id="destinationLat" name="destinationLat" type="number" step="0.0001" value="37.09" />
+        </label>
+
+        <label>
+          Hedef boylam
+          <input id="destinationLon" name="destinationLon" type="number" step="0.0001" value="37.35" />
+        </label>
+
+        <button type="submit">Rota oluştur</button>
+        <button type="button" class="secondary" id="refreshButton">Verileri yenile</button>
+      </form>
+
+      <div class="meta">
+        <div id="requestLabel">Seçili talep: -</div>
+        <strong id="priorityValue">-</strong>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <span>Mesafe</span>
+          <strong id="distanceValue">-</strong>
+        </div>
+        <div class="stat">
+          <span>Yol nokta</span>
+          <strong id="nodeValue">-</strong>
+        </div>
+      </div>
+
+      <div class="team-box">
+        <h3>Yeni acil çağrı</h3>
+        <form id="requestCreateForm" style="display:grid; gap:10px;">
+          <input id="newRequestId" placeholder="Talep ID (örn. REQ-010)" />
+          <input id="newReporter" placeholder="Rapor eden" />
+          <input id="newLat" type="number" step="0.0001" placeholder="Enlem" />
+          <input id="newLon" type="number" step="0.0001" placeholder="Boylam" />
+          <input id="newAffected" type="number" min="0" placeholder="Etkilenen kişi sayısı" />
+          <input id="newInjured" type="number" min="0" placeholder="Yaralı sayısı" />
+          <input id="newUrgency" type="number" min="1" max="5" placeholder="Aciliyet (1-5)" />
+          <input id="newNeeds" placeholder="İhtiyaçlar (medical, water, food)" />
+          <input id="newMessage" placeholder="Mesaj" />
+          <button type="submit">Çağrı ekle</button>
+        </form>
+      </div>
+
+      <div class="team-box">
+        <h3>Çağrı durumu</h3>
+        <form id="requestStatusForm" style="display:grid; gap:10px;">
+          <select id="requestStatusSelect"></select>
+          <select id="requestStatusValue">
+            <option value="waiting">Bekliyor</option>
+            <option value="assigned">Atandı</option>
+            <option value="en-route">Yolda</option>
+            <option value="resolved">Çözüldü</option>
+          </select>
+          <button type="submit" class="secondary">Çağrı durumunu güncelle</button>
+        </form>
+      </div>
+
+      <div class="team-box">
+        <h3>Ekip durumu</h3>
+        <form id="teamStatusForm" style="display:grid; gap:10px;">
+          <select id="teamStatusSelect"></select>
+          <select id="teamStatusValue">
+            <option value="ready">Hazır</option>
+            <option value="en-route">Yolda</option>
+            <option value="assigned">Atandı</option>
+            <option value="offline">Çevrimdışı</option>
+          </select>
+          <button type="submit" class="secondary">Durumu güncelle</button>
+        </form>
+      </div>
+
+      <div class="team-box">
+        <h3>Operasyon özeti</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Talep</th>
+              <th>Ekip</th>
+              <th>Durum</th>
+            </tr>
+          </thead>
+          <tbody id="operationsTableBody"></tbody>
+        </table>
+      </div>
+
+      <div class="team-box">
+        <h3>Ekip atamaları</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Talep</th>
+              <th>Ekip</th>
+              <th>Mesafe</th>
+            </tr>
+          </thead>
+          <tbody id="dispatchTableBody"></tbody>
+        </table>
+      </div>
+
+      <div class="team-box">
+        <h3>Son operasyon hareketleri</h3>
+        <div class="history-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Zaman</th>
+                <th>Olay</th>
+                <th>Kaynak</th>
+                <th>Durum</th>
+              </tr>
+            </thead>
+            <tbody id="operationsHistoryBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </aside>
+
+    <div id="map"></div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([37.08, 37.34], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    let routeLayer = null;
+    let startMarker = null;
+    let endMarker = null;
+    let teamMarkersLayer = null;
+
+    function getTeamColor(status) {
+      const palette = {
+        ready: '#2e8b57',
+        'en-route': '#d96b2f',
+        assigned: '#2b77c4',
+        offline: '#c6403e',
+        waiting: '#6f7d7b'
+      };
+      return palette[status] || '#0c7462';
+    }
+
+    function renderTeamMarkers(teams) {
+      if (teamMarkersLayer) {
+        map.removeLayer(teamMarkersLayer);
+      }
+      teamMarkersLayer = L.layerGroup().addTo(map);
+
+      teams.forEach((team) => {
+        const lat = team.location?.latitude ?? 0;
+        const lon = team.location?.longitude ?? 0;
+        const marker = L.circleMarker([lat, lon], {
+          radius: 8,
+          color: getTeamColor(team.status),
+          fillColor: getTeamColor(team.status),
+          fillOpacity: 0.9
+        }).addTo(teamMarkersLayer);
+
+        marker.bindPopup(`<strong>${team.name}</strong><br>${team.team_type}<br>Durum: ${team.status}`);
+      });
+    }
+
+    function updateStats(request, route) {
+      document.getElementById('requestLabel').textContent = 'Seçili talep: ' + request.id;
+      document.getElementById('priorityValue').textContent = request.priority_score ?? '-';
+      document.getElementById('distanceValue').textContent = route ? `${(route.distance_m / 1000).toFixed(2)} km` : '-';
+      document.getElementById('nodeValue').textContent = route ? route.route_nodes : '-';
+    }
+
+    function renderRoute(data) {
+      const request = data.request;
+      const route = data.route;
+
+      if (routeLayer) map.removeLayer(routeLayer);
+      if (startMarker) map.removeLayer(startMarker);
+      if (endMarker) map.removeLayer(endMarker);
+
+      const points = route.coordinates.map(([lon, lat]) => [lat, lon]);
+      routeLayer = L.polyline(points, { color: '#0c7462', weight: 6, opacity: 0.95 }).addTo(map);
+      startMarker = L.circleMarker([request.latitude, request.longitude], { radius: 9, color: '#d65a4a', fillColor: '#d65a4a', fillOpacity: 1 }).addTo(map).bindPopup(`Acil çağrı: ${request.id}`);
+      endMarker = L.circleMarker([route.end[1], route.end[0]], { radius: 8, color: '#2b77c4', fillColor: '#2b77c4', fillOpacity: 1 }).addTo(map).bindPopup('Hedef lokasyon');
+      map.fitBounds(routeLayer.getBounds().pad(0.2));
+      updateStats(request, route);
+    }
+
+    async function loadDispatchTable() {
+      const response = await fetch('/api/dispatch');
+      if (!response.ok) return;
+      const data = await response.json();
+      const tbody = document.getElementById('dispatchTableBody');
+      tbody.innerHTML = '';
+
+      data.assignments.forEach((assignment) => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${assignment.request_id}</td>
+          <td>${assignment.team_name}</td>
+          <td>${assignment.distance_km} km</td>
+        `;
+        tbody.appendChild(row);
+      });
+
+      const operationsTable = document.getElementById('operationsTableBody');
+      operationsTable.innerHTML = '';
+
+      const requestMap = new Map();
+      const requestsResponse = await fetch('/api/requests');
+      if (requestsResponse.ok) {
+        const requestsData = await requestsResponse.json();
+        requestsData.requests.forEach((request) => requestMap.set(request.id, request));
+      }
+
+      data.assignments.forEach((assignment) => {
+        const request = requestMap.get(assignment.request_id);
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${assignment.request_id}</td>
+          <td>${assignment.team_name}</td>
+          <td>${request ? request.status : assignment.status}</td>
+        `;
+        operationsTable.appendChild(row);
+      });
+
+      if (data.teams) {
+        renderTeamMarkers(data.teams);
+      }
+    }
+
+    async function loadOperationHistory() {
+      const response = await fetch('/api/operations');
+      if (!response.ok) return;
+      const data = await response.json();
+      const tbody = document.getElementById('operationsHistoryBody');
+      tbody.innerHTML = '';
+
+      data.operations.forEach((operation) => {
+        const row = document.createElement('tr');
+        const source = operation.request_id || operation.team_id || '-';
+        const eventLabel = operation.event_type === 'request_status' ? 'Talep' : 'Ekip';
+        row.innerHTML = `
+          <td>${operation.created_at || '-'}</td>
+          <td>${eventLabel}</td>
+          <td>${source}</td>
+          <td>${operation.status || '-'}</td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    async function loadTeams() {
+      const response = await fetch('/api/teams');
+      if (!response.ok) return;
+      const data = await response.json();
+      const select = document.getElementById('teamStatusSelect');
+      select.innerHTML = '';
+      data.teams.forEach((team) => {
+        const option = document.createElement('option');
+        option.value = team.id;
+        option.textContent = `${team.name} (${team.status})`;
+        select.appendChild(option);
+      });
+    }
+
+    function syncRequestStatusSelect(requests) {
+      const select = document.getElementById('requestStatusSelect');
+      select.innerHTML = '';
+      requests.forEach((request) => {
+        const option = document.createElement('option');
+        option.value = request.id;
+        option.textContent = `${request.id} (${request.status || 'waiting'})`;
+        select.appendChild(option);
+      });
+    }
+
+    async function refreshAll() {
+      const response = await fetch('/api/refresh');
+      if (!response.ok) {
+        throw new Error('Veriler yenilenemedi.');
+      }
+      const data = await response.json();
+      const select = document.getElementById('requestSelect');
+      select.innerHTML = '';
+      data.requests.forEach((request) => {
+        const option = document.createElement('option');
+        option.value = request.id;
+        option.textContent = `${request.id} — P:${request.priority_score}`;
+        select.appendChild(option);
+      });
+      syncRequestStatusSelect(data.requests);
+      await loadTeams();
+      await loadDispatchTable();
+      await loadOperationHistory();
+      const activeRequest = data.requests[0];
+      if (activeRequest) {
+        document.getElementById('requestSelect').value = activeRequest.id;
+        document.getElementById('destinationLat').value = '37.09';
+        document.getElementById('destinationLon').value = '37.35';
+        const routeResponse = await fetch('/api/route', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            request_id: activeRequest.id,
+            destination_lat: 37.09,
+            destination_lon: 37.35
+          })
+        });
+        const routeData = await routeResponse.json();
+        renderRoute(routeData);
+      }
+    }
+
+    async function loadRequests() {
+      const response = await fetch('/api/requests');
+      if (!response.ok) {
+        throw new Error('İstek listesi yüklenemedi.');
+      }
+      const data = await response.json();
+      const select = document.getElementById('requestSelect');
+      select.innerHTML = '';
+      data.requests.forEach((request) => {
+        const option = document.createElement('option');
+        option.value = request.id;
+        option.textContent = `${request.id} — P:${request.priority_score}`;
+        select.appendChild(option);
+      });
+
+      const firstRequest = data.requests[0];
+      if (firstRequest) {
+        document.getElementById('destinationLat').value = '37.09';
+        document.getElementById('destinationLon').value = '37.35';
+        return firstRequest;
+      }
+      return null;
+    }
+
+    async function buildRoute(event) {
+      event.preventDefault();
+      const requestId = document.getElementById('requestSelect').value;
+      const destinationLat = document.getElementById('destinationLat').value;
+      const destinationLon = document.getElementById('destinationLon').value;
+
+      const response = await fetch('/api/route', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          request_id: requestId,
+          destination_lat: Number(destinationLat),
+          destination_lon: Number(destinationLon)
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Rota oluşturulamadı.');
+      }
+
+      const data = await response.json();
+      renderRoute(data);
+    }
+
+    document.getElementById('routeForm').addEventListener('submit', async (event) => {
+      try {
+        await buildRoute(event);
+      } catch (error) {
+        alert(error.message || 'Rota oluştururken hata oluştu.');
+      }
+    });
+
+    document.getElementById('requestCreateForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const payload = {
+        id: document.getElementById('newRequestId').value || `REQ-${Date.now()}`,
+        reporter: document.getElementById('newReporter').value || 'Saha koordinasyonu',
+        latitude: Number(document.getElementById('newLat').value || 0),
+        longitude: Number(document.getElementById('newLon').value || 0),
+        people_affected: Number(document.getElementById('newAffected').value || 0),
+        injured_people: Number(document.getElementById('newInjured').value || 0),
+        urgency: Number(document.getElementById('newUrgency').value || 1),
+        needs: (document.getElementById('newNeeds').value || '').split(',').map((x) => x.trim()).filter(Boolean),
+        message: document.getElementById('newMessage').value || '',
+        status: 'waiting'
+      };
+
+      const response = await fetch('/api/requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error('Yeni çağrı eklenemedi.');
+      }
+
+      await refreshAll();
+      alert('Yeni acil çağrı eklendi.');
+    });
+
+    document.getElementById('requestStatusForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const payload = {
+        request_id: document.getElementById('requestStatusSelect').value,
+        status: document.getElementById('requestStatusValue').value
+      };
+
+      const response = await fetch('/api/requests/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error('Çağrı durumu güncellenemedi.');
+      }
+
+      await refreshAll();
+      alert('Çağrı durumu güncellendi.');
+    });
+
+    document.getElementById('teamStatusForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const payload = {
+        team_id: document.getElementById('teamStatusSelect').value,
+        status: document.getElementById('teamStatusValue').value
+      };
+
+      const response = await fetch('/api/teams/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error('Ekip durumu güncellenemedi.');
+      }
+
+      await refreshAll();
+      alert('Ekip durumu güncellendi.');
+    });
+
+    document.getElementById('refreshButton').addEventListener('click', async () => {
+      try {
+        await refreshAll();
+      } catch (error) {
+        alert(error.message || 'Veriler yenilenirken hata oluştu.');
+      }
+    });
+
+    async function loadDefaultRequest() {
+      const requestsResponse = await fetch('/api/requests');
+      if (!requestsResponse.ok) return;
+      const requestsData = await requestsResponse.json();
+      const firstRequest = requestsData.requests[0];
+      if (!firstRequest) return;
+
+      const select = document.getElementById('requestSelect');
+      select.innerHTML = '';
+      requestsData.requests.forEach((request) => {
+        const option = document.createElement('option');
+        option.value = request.id;
+        option.textContent = `${request.id} — P:${request.priority_score}`;
+        if (request.id === firstRequest.id) option.selected = true;
+        select.appendChild(option);
+      });
+
+      const routeResponse = await fetch('/api/route', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          request_id: firstRequest.id,
+          destination_lat: 37.09,
+          destination_lon: 37.35
+        })
+      });
+      if (routeResponse.ok) {
+        const data = await routeResponse.json();
+        renderRoute(data);
+      }
+    }
+
+    loadTeams().catch((error) => console.error(error));
+    loadDispatchTable().catch((error) => console.error(error));
+    loadOperationHistory().catch((error) => console.error(error));
+    loadDefaultRequest().catch((error) => console.error(error));
+  </script>
+</body>
+</html>

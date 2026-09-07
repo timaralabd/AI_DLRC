@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.data_store import fetch_teams
+from src.data_store import fetch_operation_log, fetch_teams
 from src.dispatch_dashboard import build_dispatch_plan
 from src.priority_route_integration import build_priority_route, load_ranked_requests, main as refresh_priority_route
 
@@ -39,6 +39,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
         if parsed.path == "/api/dispatch":
             self._send_json({"assignments": build_dispatch_plan(), "teams": fetch_teams()})
+            return
+
+        if parsed.path == "/api/operations":
+            self._send_json({"operations": fetch_operation_log(limit=30)})
             return
 
         if parsed.path == "/api/refresh":
