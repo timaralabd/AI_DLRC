@@ -1,7 +1,9 @@
 import requests
 import json
+import re
 import zipfile
 from pathlib import Path
+from html.parser import HTMLParser
 
 print("AI-DLRC Damage Data Collector")
 print("=" * 60)
@@ -11,6 +13,7 @@ API_URL = (
     "https://rapidmapping.emergency.copernicus.eu/"
     "backend/dashboard-api/public-activations/?code=EMSR648"
 )
+ACTIVATION_PAGE_URL = "https://mapping.emergency.copernicus.eu/activations/EMSR648"
 
 DATA_DIR = Path("data/damage")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -19,14 +22,45 @@ print("Connecting to Copernicus EMS API...")
 print("Activation: EMSR648")
 print()
 
+
+class DownloadLinkParser(HTMLParser):
+    """Collect downloadable product links from the public activation page."""
+
+    def __init__(self):
+        super().__init__()
+        self.urls = []
+
+    def handle_starttag(self, tag, attrs):
+        href = "".join(dict(attrs).get("href", "").split())
+        href_lower = href.lower()
+        if href.startswith("http") and (".zip" in href_lower or ".gpkg" in href_lower):
+            if href not in self.urls:
+                self.urls.append(href)
+
 # ---------------------------------------------------------
 # 1. Get activation information
 # ---------------------------------------------------------
 
-response = requests.get(API_URL, timeout=60)
-response.raise_for_status()
+try:
+    response = requests.get(API_URL, timeout=60)
+    response.raise_for_status()
+    activation_data = response.json()
+except requests.HTTPError as error:
+    if response.status_code not in (401, 403):
+        raise
 
-activation_data = response.json()
+    print(f"Dashboard API unavailable ({response.status_code}); using public activation page.")
+    page_response = requests.get(ACTIVATION_PAGE_URL, timeout=60)
+    page_response.raise_for_status()
+    page_html = "".join(page_response.text.split())
+    page_parser = DownloadLinkParser()
+    page_parser.feed(page_html)
+    page_urls = re.findall(r'https://[^"\'<>]+\.(?:zip|gpkg)', page_html, re.IGNORECASE)
+    activation_data = {
+        "activation_page": ACTIVATION_PAGE_URL,
+        "download_urls": list(dict.fromkeys(page_parser.urls + page_urls)),
+        "api_error": str(error),
+    }
 
 print("Copernicus API connection successful!")
 print()
@@ -59,26 +93,19 @@ def search_urls(obj):
     for downloadable URLs.
     """
 
-    if isinstance(obj, dict):
+    if isinstance(obj, str):
+        value_lower = obj.lower()
+        if obj.startswith("http") and (
+            ".zip" in value_lower or ".gpkg" in value_lower
+        ):
+            if obj not in download_urls:
+                download_urls.append(obj)
+
+    elif isinstance(obj, dict):
 
         for key, value in obj.items():
 
-            if isinstance(value, str):
-
-                value_lower = value.lower()
-
-                if value.startswith("http"):
-                    if (
-                        ".zip" in value_lower
-                        or ".gpkg" in value_lower
-                        or ".geojson" in value_lower
-                        or ".json" in value_lower
-                    ):
-                        if value not in download_urls:
-                            download_urls.append(value)
-
-            else:
-                search_urls(value)
+            search_urls(value)
 
     elif isinstance(obj, list):
 

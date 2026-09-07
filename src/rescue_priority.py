@@ -1,75 +1,89 @@
-print("AI-DLRC Rescue Priority System")
-print("-" * 40)
+import argparse
+import json
+from pathlib import Path
 
-# Simulated disaster zones
-zones = {
-    "Zone_A": {
-        "people": 120,
-        "damage": 80,
-        "distance": 5
-    },
-    "Zone_B": {
-        "people": 40,
-        "damage": 50,
-        "distance": 3
-    },
-    "Zone_C": {
-        "people": 200,
-        "damage": 90,
-        "distance": 8
-    },
-    "Zone_D": {
-        "people": 70,
-        "damage": 30,
-        "distance": 2
-    }
-}
+DEFAULT_REQUESTS_PATH = Path("data/emergency_requests.json")
+DEFAULT_OUTPUT_PATH = Path("results/rescue_priority_ranked.json")
 
-def calculate_priority(people, damage, distance):
+
+def calculate_need_weight(needs):
+    weight = 0.0
+    for need in needs or []:
+        need_lower = str(need).lower()
+        if need_lower in {"medical", "ambulance", "hospital"}:
+            weight += 2.5
+        elif need_lower in {"water", "food", "shelter", "rescue"}:
+            weight += 1.5
+        elif need_lower in {"blanket", "warm", "sanitation"}:
+            weight += 1.0
+        else:
+            weight += 1.0
+    return weight
+
+
+def calculate_priority(request):
+    people_affected = float(request.get("people_affected", 0) or 0)
+    injured = float(request.get("injured_people", 0) or 0)
+    urgency = float(request.get("urgency", 0) or 0)
+    need_weight = calculate_need_weight(request.get("needs", []))
+
     score = (
-        people * 0.5
-        + damage * 0.4
-        - distance * 2
+        people_affected * 0.6
+        + injured * 2.2
+        + urgency * 10
+        + need_weight * 6
     )
 
     return round(score, 2)
 
 
-results = []
+def rank_requests(requests):
+    ranked = []
+    for request in requests:
+        priority_score = calculate_priority(request)
+        ranked.append({
+            "id": request.get("id", "UNKNOWN"),
+            "reporter": request.get("reporter", "Unknown"),
+            "latitude": request.get("latitude"),
+            "longitude": request.get("longitude"),
+            "people_affected": request.get("people_affected", 0),
+            "injured_people": request.get("injured_people", 0),
+            "urgency": request.get("urgency", 0),
+            "needs": request.get("needs", []),
+            "status": request.get("status", "waiting"),
+            "priority_score": priority_score,
+            "message": request.get("message", ""),
+        })
 
-for zone, data in zones.items():
-
-    priority = calculate_priority(
-        data["people"],
-        data["damage"],
-        data["distance"]
-    )
-
-    results.append({
-        "zone": zone,
-        "priority": priority
-    })
+    ranked.sort(key=lambda item: item["priority_score"], reverse=True)
+    return ranked
 
 
-# Sort zones by priority
-results.sort(
-    key=lambda x: x["priority"],
-    reverse=True
-)
+def load_requests(path):
+    with path.open("r", encoding="utf-8") as file:
+        data = json.load(file)
+    return data.get("requests", [])
 
-print("Rescue Priority:")
-print()
 
-for rank, result in enumerate(results, start=1):
+def main():
+    parser = argparse.ArgumentParser(description="Rank emergency requests by rescue priority.")
+    parser.add_argument("--input", type=Path, default=DEFAULT_REQUESTS_PATH)
+    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT_PATH)
+    args = parser.parse_args()
 
-    print(
-        f"{rank}. {result['zone']} "
-        f"-> Priority Score: {result['priority']}"
-    )
+    requests = load_requests(args.input)
+    ranked = rank_requests(requests)
 
-print()
-print("Highest priority zone:")
-print(results[0]["zone"])
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    with args.output.open("w", encoding="utf-8") as file:
+        json.dump({"requests": ranked}, file, indent=2, ensure_ascii=False)
 
-print()
-print("Rescue priority calculation completed!")
+    print("Rescue priority ranking:")
+    for rank, item in enumerate(ranked, start=1):
+        print(f"{rank}. {item['id']} -> score {item['priority_score']} ({item['reporter']})")
+
+    print(f"\nSaved ranked output to: {args.output}")
+
+
+if __name__ == "__main__":
+    main()
