@@ -72,9 +72,12 @@ def team_score_for_request(team: Dict, request: Dict) -> float:
     return score
 
 
-def assign_team_for_request(request: Dict) -> Dict:
+def assign_team_for_request(request: Dict, teams: List[Dict] | None = None) -> Dict:
     ranked = []
-    for team in TEAM_DATA:
+    candidate_teams = teams if teams is not None else TEAM_DATA
+    if not candidate_teams:
+        raise ValueError("No available teams")
+    for team in candidate_teams:
         ranked.append({
             "team": team,
             "score": team_score_for_request(team, request),

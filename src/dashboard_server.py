@@ -9,7 +9,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.data_store import fetch_operation_log, fetch_teams
-from src.dispatch_dashboard import build_dispatch_plan
+from src.dispatch_dashboard import build_dispatch_plan, dispatch_next_request
 from src.priority_route_integration import build_priority_route, load_ranked_requests, main as refresh_priority_route
 
 RESULTS_DIR = ROOT / "results"
@@ -116,6 +116,18 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 return
             except Exception as exc:  # pragma: no cover - network-layer safety
                 self.send_error(400, f"Invalid team status payload: {exc}")
+                return
+
+        if parsed.path == "/api/dispatch/next":
+            try:
+                assignment = dispatch_next_request()
+                if assignment is None:
+                    self._send_json({"status": "empty", "message": "Bekleyen talep bulunamadı."})
+                    return
+                self._send_json({"status": "ok", "assignment": assignment})
+                return
+            except (RuntimeError, ValueError) as exc:
+                self.send_error(409, str(exc))
                 return
 
         if parsed.path != "/api/route":

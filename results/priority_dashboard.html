@@ -79,6 +79,7 @@
 
         <button type="submit">Rota oluştur</button>
         <button type="button" class="secondary" id="refreshButton">Verileri yenile</button>
+        <button type="button" class="secondary" id="dispatchNextButton">En öncelikli talebi ata</button>
       </form>
 
       <div class="meta">
@@ -515,6 +516,26 @@
         await refreshAll();
       } catch (error) {
         alert(error.message || 'Veriler yenilenirken hata oluştu.');
+      }
+    });
+
+    document.getElementById('dispatchNextButton').addEventListener('click', async () => {
+      const button = document.getElementById('dispatchNextButton');
+      button.disabled = true;
+      try {
+        const response = await fetch('/api/dispatch/next', { method: 'POST' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data || 'Atama yapılamadı.');
+        if (data.status === 'empty') {
+          alert(data.message);
+          return;
+        }
+        await refreshAll();
+        alert(`${data.assignment.request_id} talebi ${data.assignment.team_name} ekibine atandı.`);
+      } catch (error) {
+        alert(error.message || 'Otomatik atama sırasında hata oluştu.');
+      } finally {
+        button.disabled = false;
       }
     });
 
