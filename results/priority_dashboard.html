@@ -39,6 +39,7 @@
     }
     .meta { margin-top: 18px; padding: 12px; background: #0b213b; border-radius: 8px; border: 1px solid #1c5b99; }
     .meta strong { font-size: 22px; display: block; margin-top: 4px; }
+    .sync-status { margin-top: 10px; color: var(--muted); font-size: 11px; }
     .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
     .stat { background: #0a1728; border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
     .stat span { display: block; font-size: 11px; color: var(--muted); }
@@ -85,6 +86,7 @@
       <div class="meta">
         <div id="requestLabel">Seçili talep: -</div>
         <strong id="priorityValue">-</strong>
+        <div class="sync-status" id="syncStatus">Veriler bekleniyor</div>
       </div>
 
       <div class="stats">
@@ -348,8 +350,11 @@
     }
 
     async function refreshAll() {
+      const syncStatus = document.getElementById('syncStatus');
+      syncStatus.textContent = 'Veriler yenileniyor...';
       const response = await fetch('/api/refresh');
       if (!response.ok) {
+        syncStatus.textContent = 'Yenileme başarısız';
         throw new Error('Veriler yenilenemedi.');
       }
       const data = await response.json();
@@ -382,6 +387,7 @@
         const routeData = await routeResponse.json();
         renderRoute(routeData);
       }
+      syncStatus.textContent = `Son senkronizasyon: ${new Date().toLocaleTimeString('tr-TR')}`;
     }
 
     async function loadRequests() {
@@ -519,6 +525,10 @@
       }
     });
 
+    setInterval(() => {
+      refreshAll().catch((error) => console.error('Otomatik yenileme başarısız:', error));
+    }, 30000);
+
     document.getElementById('dispatchNextButton').addEventListener('click', async () => {
       const button = document.getElementById('dispatchNextButton');
       button.disabled = true;
@@ -569,6 +579,7 @@
         const data = await routeResponse.json();
         renderRoute(data);
       }
+      document.getElementById('syncStatus').textContent = `Son senkronizasyon: ${new Date().toLocaleTimeString('tr-TR')}`;
     }
 
     loadTeams().catch((error) => console.error(error));
