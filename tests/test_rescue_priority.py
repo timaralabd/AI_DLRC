@@ -8,7 +8,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.data_store import (
     fetch_operation_log,
     fetch_ranked_requests,
+    fetch_dispatch_assignments,
     fetch_teams,
+    save_request,
     save_dispatch_assignments,
     save_teams,
     update_request_status,
@@ -49,6 +51,17 @@ def test_team_store_and_dispatch_store_round_trip():
 
 
 def test_request_and_team_status_update_round_trip():
+    save_request({
+        "id": "REQ-TEST-1",
+        "reporter": "Test coordinator",
+        "latitude": 37.1,
+        "longitude": 37.3,
+        "people_affected": 10,
+        "injured_people": 1,
+        "urgency": 4,
+        "needs": ["medical"],
+        "status": "waiting",
+    })
     update_team_status("TEAM-TEST-1", "en-route")
     update_request_status("REQ-TEST-1", "assigned")
 
