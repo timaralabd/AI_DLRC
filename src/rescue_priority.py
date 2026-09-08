@@ -38,9 +38,15 @@ def calculate_priority(request):
 
 
 def rank_requests(requests):
+    requests = list(requests)
+    try:
+        from src.ai_priority import predict_priority
+        ai_scores, _ = predict_priority(requests)
+    except (ImportError, ValueError):
+        ai_scores = [calculate_priority(request) for request in requests]
+
     ranked = []
-    for request in requests:
-        priority_score = calculate_priority(request)
+    for request, priority_score in zip(requests, ai_scores):
         ranked.append({
             "id": request.get("id", "UNKNOWN"),
             "reporter": request.get("reporter", "Unknown"),

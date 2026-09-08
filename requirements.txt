@@ -1,0 +1,5 @@
+networkx==3.6.1
+osmnx==2.1.1
+requests==2.34.2
+scikit-learn==1.8.0
+joblib==1.6.0
